@@ -58,22 +58,52 @@ The analysis suggests that patients with cardiovascular disease generally have h
 
 The logistic regression model predicts whether a patient has cardiovascular disease. Results on the held-out test set:
 
-| Metric | Score |
-| --- | ---: |
-| Accuracy | 0.954 |
-| Precision | 0.951 |
-| Recall | 0.895 |
-| ROC-AUC | 0.951 |
+| Metric | Baseline | Outliers removed | SelectKBest (16 features) |
+| --- | ---: | ---: | ---: |
+| Accuracy | 0.954 | 0.952 | 0.956 |
+| Precision | 0.951 | 0.949 | 0.953 |
+| Recall | 0.895 | 0.893 | 0.901 |
+| ROC-AUC | 0.951 | 0.951 | 0.951 |
 
-Precision of 0.951 means that 95.1% of patients predicted to have cardiovascular disease actually had the disease. Recall of 0.895 means that the model identified 89.5% of patients who actually had the disease. The remaining cases are false negatives.
+Precision means that 95.3% of patients predicted to have cardiovascular disease by the 16-feature model actually had the disease. Recall means that the model identified 90.1% of patients with disease. The remaining cases are false negatives.
 
-Overall, the classification model performs strongly on this dataset. In a health-screening context, recall is particularly important because missed disease cases may be more serious than false alarms.
+Two logistic-regression variations were also tested:
+
+- **Outlier removal:** IQR-based training-row removal excluded 816 observations. It slightly reduced accuracy, precision, and recall, so it did not improve performance.
+- **SelectKBest:** after one-hot encoding categorical columns and scaling numeric columns, ANOVA `f_classif` selection retained 16 encoded features. It improved accuracy from 95.4% to 95.6%, precision from 95.1% to 95.3%, and recall from 89.5% to 90.1%. ROC-AUC remained 95.1%.
+
+Overall, the 16-feature `SelectKBest` model is the preferred candidate in the held-out comparison because it achieved the best accuracy, precision, and recall.
+
+#### Five-Fold Cross-Validation
+
+Five-fold stratified cross-validation was also performed. Imputation, scaling, encoding, feature selection, and IQR outlier bounds were applied within each training fold to prevent leakage.
+
+| Model | Accuracy | Precision | Recall | ROC-AUC |
+| --- | ---: | ---: | ---: | ---: |
+| Baseline | 0.960 ± 0.004 | 0.958 ± 0.007 | 0.909 ± 0.009 | 0.958 ± 0.005 |
+| Outliers removed | 0.958 ± 0.004 | 0.953 ± 0.006 | 0.909 ± 0.009 | 0.958 ± 0.005 |
+| SelectKBest (16 features) | 0.962 ± 0.004 | 0.961 ± 0.007 | 0.914 ± 0.006 | 0.958 ± 0.005 |
+
+The 16-feature `SelectKBest` model achieved the highest mean accuracy, precision, and recall across folds. It also had a recall standard deviation of 0.006, indicating relatively consistent detection of cardiovascular-disease cases. Outlier removal did not improve cross-validation performance. An external test dataset is still recommended before real-world or clinical use.
 
 ### K-Means Clustering
 
-K-means is used to group patients using standardized numeric health and lifestyle variables. The analysis tests values of `k` from 2 through 5 and selects `k = 2`, which has the highest silhouette score.
+Three K-means feature representations were compared for $k=2$ through $k=5$: all numeric health features, 16 `SelectKBest` encoded features, and all preprocessed standardized features. The target variable was excluded from every clustering matrix.
 
-The selected silhouette score is 0.072, indicating weak separation between the clusters. The clusters show broad differences in age, blood pressure, blood glucose, and risk score, but they overlap substantially. These segments are useful for exploratory profiling and are not diagnostic categories.
+| Feature set | k = 2 | k = 3 | k = 4 | k = 5 |
+|---|---:|---:|---:|---:|
+| All numeric features | 0.074 | 0.057 | 0.044 | 0.042 |
+| 16 SelectKBest features | 0.189 | 0.189 | 0.163 | 0.179 |
+| All preprocessed features | 0.058 | 0.049 | 0.048 | 0.036 |
+
+The 16 `SelectKBest` encoded features produced the strongest separation. The silhouette score was 0.189 for both $k=2$ and $k=3$; the implementation selected $k=2$ as the smaller cluster count for the tie.
+
+The winning two-cluster result contains:
+
+- **Cluster 0:** 13,912 patients, average blood glucose 93.59, average risk score 8.74, and 21.6% cardiovascular-disease prevalence.
+- **Cluster 1:** 6,088 patients, average blood glucose 132.92, average risk score 12.37, and 51.1% cardiovascular-disease prevalence.
+
+The 0.189 silhouette score indicates modest separation rather than sharply distinct patient groups. These segments are useful for exploratory patient profiling and are not diagnostic or causal results.
 
 ## How to Run
 
@@ -100,6 +130,8 @@ Alternatively, open the notebook in VS Code with the Jupyter extension installed
 
 ## Limitations
 
-- The classification metrics are based on one held-out test split and should be confirmed with cross-validation and external data.
 - The dataset may not represent every population or clinical setting.
-- Clustering has weak separation according to the silhouette score.
+- Missing values are handled with median or most-frequent imputation inside modeling pipelines.
+- The held-out results and 5-fold cross-validation are strong, but an external test dataset is still needed before real-world or clinical use.
+- IQR outlier removal did not improve held-out or cross-validation performance.
+- K-means cluster separation was modest, with the best silhouette score of 0.189. Clusters are descriptive, not diagnostic or causal.
